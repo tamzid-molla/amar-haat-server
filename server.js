@@ -20,18 +20,32 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-      await client.connect();
-      
+    await client.connect();
+    const db = client.db("bazarDb");
+    const usersCollections = db.collection("users");
 
+    //save or update user
+    app.post("/users", async (req, res) => {
+      const userData = req.body;
+      userData.role = "user";
+      userData.created_at = new Date();
+      userData.last_loggedIn = new Date();
+
+      const query = { email: userData?.email };
+      const alreadyExist = await usersCollections.findOne(query);
+
+      if (!!alreadyExist) {
+        const result = await usersCollections.updateOne(query, { $set: { last_loggedIn: new Date() } });
+        return res.send(result);
+      }
+      const result = await usersCollections.insertOne(userData);
+      res.status(201).send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
-    
   }
 }
 run().catch(console.dir);
