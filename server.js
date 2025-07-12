@@ -3,14 +3,14 @@ const express = require("express");
 const admin = require("firebase-admin");
 const cors = require("cors");
 const app = express();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3001;
 
 const serviceAccount = {
   type: process.env.FIREBASE_type,
   project_id: process.env.FIREBASE_project_id,
   private_key_id: process.env.FIREBASE_private_key_id,
-  private_key: process.env.FIREBASE_private_key.replace(/\\n/g, '\n'),
+  private_key: process.env.FIREBASE_private_key.replace(/\\n/g, "\n"),
   client_email: process.env.FIREBASE_client_email,
   client_id: process.env.FIREBASE_client_id,
   auth_uri: process.env.FIREBASE_auth_uri,
@@ -83,6 +83,31 @@ async function run() {
       const productData = req.body;
       productData.status = "pending";
       const result = await productsCollections.insertOne(productData);
+      res.send(result);
+    });
+
+    //get 6 product deferent market for home page
+    app.get("/products", async (req, res) => {
+      const today = new Date();
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(today.getDate() - 2);
+
+      const query = {
+        status: "approved",
+        created_at: {
+          $gte: threeDaysAgo.toISOString(),
+          $lte: today.toISOString(),
+        },
+      };
+      const result = await productsCollections.find(query).limit(6).toArray();
+      res.send(result);
+    });
+
+    //Get specific product for product Details
+    app.get("/product/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await productsCollections.findOne(query);
       res.send(result);
     });
 
