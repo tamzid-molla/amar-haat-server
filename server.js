@@ -1,9 +1,28 @@
 require("dotenv").config();
 const express = require("express");
+const admin = require("firebase-admin");
 const cors = require("cors");
 const app = express();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 3001;
+
+const serviceAccount = {
+  type: process.env.FIREBASE_type,
+  project_id: process.env.FIREBASE_project_id,
+  private_key_id: process.env.FIREBASE_private_key_id,
+  private_key: process.env.FIREBASE_private_key.replace(/\\n/g, '\n'),
+  client_email: process.env.FIREBASE_client_email,
+  client_id: process.env.FIREBASE_client_id,
+  auth_uri: process.env.FIREBASE_auth_uri,
+  token_uri: process.env.FIREBASE_token_uri,
+  auth_provider_x509_cert_url: process.env.FIREBASE_auth_provider_x509_cert_url,
+  client_x509_cert_url: process.env.FIREBASE_client_x509_cert_url,
+  universe_domain: process.env.FIREBASE_universe_domain,
+};
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 //middlewares
 app.use(cors());
@@ -18,11 +37,28 @@ const client = new MongoClient(process.env.MONGODB_URI, {
   },
 });
 
+//Verify jwt
+const verifyJWT = async (req, res, next) => {
+  const token = req?.headers?.authorization?.split(" ")[1];
+  console.log(token);
+  if (!token) return res.status(401).send({ message: "Unauthorized Access" });
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    console.log(decoded);
+    req.tokenEmail = decoded?.email;
+    next();
+  } catch (err) {
+    return res.status(401).send({ message: "Unauthorized Access" });
+  }
+};
+
 async function run() {
   try {
     await client.connect();
     const db = client.db("bazarDb");
     const usersCollections = db.collection("users");
+    const productsCollections = db.collection("products");
 
     //save or update user
     app.post("/users", async (req, res) => {
@@ -40,6 +76,14 @@ async function run() {
       }
       const result = await usersCollections.insertOne(userData);
       res.status(201).send(result);
+    });
+
+    //Add all products
+    app.post("/products", verifyJWT, async (req, res) => {
+      const productData = req.body;
+      productData.status = "pending";
+      const result = await productsCollections.insertOne(productData);
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
