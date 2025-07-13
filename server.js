@@ -3,6 +3,7 @@ const express = require("express");
 const admin = require("firebase-admin");
 const cors = require("cors");
 const app = express();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3001;
 
@@ -40,12 +41,10 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 //Verify jwt
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
-  console.log(token);
   if (!token) return res.status(401).send({ message: "Unauthorized Access" });
 
   try {
     const decoded = await admin.auth().verifyIdToken(token);
-    console.log(decoded);
     req.tokenEmail = decoded?.email;
     next();
   } catch (err) {
@@ -60,6 +59,31 @@ async function run() {
     const usersCollections = db.collection("users");
     const productsCollections = db.collection("products");
     const watchListCollections = db.collection("watchLists");
+    const ordersCollections = db.collection("orders");
+
+    //Stripe Payment Api
+    app.post("/create-payment-intent", async (req, res) => {
+      const { amount } = req.body;
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: parseInt(amount * 100), // Stripe uses cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.send({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        res.status(500).send({ error: error.message });
+      }
+    });
+
+    //Orders post Api 
+    app.post("/orders", verifyJWT, async (req, res) => {
+      const orderData = req.body;
+      const result = await ordersCollections.insertOne(orderData);
+      res.send(result);
+    })
+
 
     //save or update user
     app.post("/users", async (req, res) => {
@@ -148,7 +172,6 @@ async function run() {
     //WatchList post APi
     app.post("/watchList", verifyJWT, async (req, res) => {
       const watchListData = req.body;
-      console.log(watchListData);
       const query = {
         userEmail: watchListData?.userEmail,
         productId: watchListData?.productId,
