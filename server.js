@@ -81,8 +81,33 @@ async function run() {
     //Add all products
     app.post("/products", verifyJWT, async (req, res) => {
       const productData = req.body;
+      if (typeof productData.created_at === "string") {
+        productData.created_at = new Date(productData.created_at);
+      }
       productData.status = "pending";
       const result = await productsCollections.insertOne(productData);
+      res.send(result);
+    });
+
+    //Get all Products for All Product page
+    app.get("/products/all", async (req, res) => {
+      const { start, end, sort } = req.query;
+      const query = {};
+      if (start && end) {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        query.created_at = {
+          $gte: startDate,
+          $lte: endDate,
+        };
+      }
+
+      const sortOption = {};
+      if (sort === "asc") sortOption.pricePerUnit = 1;
+      else if (sort === "desc") sortOption.pricePerUnit = -1;
+
+      const result = await productsCollections.find(query).sort(sortOption).toArray();
+
       res.send(result);
     });
 
@@ -95,8 +120,8 @@ async function run() {
       const query = {
         status: "approved",
         created_at: {
-          $gte: threeDaysAgo.toISOString(),
-          $lte: today.toISOString(),
+          $gte: threeDaysAgo,
+          $lte: today,
         },
       };
       const result = await productsCollections.find(query).limit(6).toArray();
