@@ -78,13 +78,12 @@ async function run() {
       }
     });
 
-    //Orders post Api 
+    //Orders post Api
     app.post("/orders", verifyJWT, async (req, res) => {
       const orderData = req.body;
       const result = await ordersCollections.insertOne(orderData);
       res.send(result);
-    })
-
+    });
 
     //save or update user
     app.post("/users", async (req, res) => {
@@ -185,22 +184,30 @@ async function run() {
       res.send(result);
     });
 
-    //Reviews post Api 
+    //Reviews post Api
     app.post("/reviews", verifyJWT, async (req, res) => {
       const reviewData = req.body;
       const query = {
         productId: reviewData?.productId,
         userEmail: reviewData?.userEmail,
-      }
+      };
       const isExist = await reviewsCollections.findOne(query);
       if (isExist) {
         return res.send({ message: "You have already reviewed this product." });
       }
       const result = await reviewsCollections.insertOne(reviewData);
-      res.send(result)
-    })
+      res.send(result);
+    });
 
-   
+    //Review get Api
+    app.get("/reviews/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        productId: id,
+      };
+      const result = await reviewsCollections.find(query).sort({ date: -1 }).toArray();
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
