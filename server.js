@@ -59,6 +59,7 @@ async function run() {
     const db = client.db("bazarDb");
     const usersCollections = db.collection("users");
     const productsCollections = db.collection("products");
+    const watchListCollections = db.collection("watchLists");
 
     //save or update user
     app.post("/users", async (req, res) => {
@@ -76,6 +77,14 @@ async function run() {
       }
       const result = await usersCollections.insertOne(userData);
       res.status(201).send(result);
+    });
+
+    //getting user role
+    app.get("/users/role/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await usersCollections.findOne(query);
+      res.send(result);
     });
 
     //Add all products
@@ -133,6 +142,22 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await productsCollections.findOne(query);
+      res.send(result);
+    });
+
+    //WatchList post APi
+    app.post("/watchList", verifyJWT, async (req, res) => {
+      const watchListData = req.body;
+      console.log(watchListData);
+      const query = {
+        userEmail: watchListData?.userEmail,
+        productId: watchListData?.productId,
+      };
+      const isExist = await watchListCollections.findOne(query);
+      if (isExist) {
+        return res.send({ message: "This item already in watchList" });
+      }
+      const result = await watchListCollections.insertOne(watchListData);
       res.send(result);
     });
 
