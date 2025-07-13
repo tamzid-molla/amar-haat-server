@@ -60,6 +60,7 @@ async function run() {
     const productsCollections = db.collection("products");
     const watchListCollections = db.collection("watchLists");
     const ordersCollections = db.collection("orders");
+    const reviewsCollections = db.collection("reviews");
 
     //Stripe Payment Api
     app.post("/create-payment-intent", async (req, res) => {
@@ -183,6 +184,23 @@ async function run() {
       const result = await watchListCollections.insertOne(watchListData);
       res.send(result);
     });
+
+    //Reviews post Api 
+    app.post("/reviews", verifyJWT, async (req, res) => {
+      const reviewData = req.body;
+      const query = {
+        productId: reviewData?.productId,
+        userEmail: reviewData?.userEmail,
+      }
+      const isExist = await reviewsCollections.findOne(query);
+      if (isExist) {
+        return res.send({ message: "You have already reviewed this product." });
+      }
+      const result = await reviewsCollections.insertOne(reviewData);
+      res.send(result)
+    })
+
+   
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
