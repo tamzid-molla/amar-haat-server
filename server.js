@@ -241,7 +241,7 @@ async function run() {
         },
       };
       const result = await productsCollections.updateOne(query, updatedDoc);
-      res.send(result)
+      res.send(result);
     });
 
     //Get prices for price trending
@@ -321,6 +321,32 @@ async function run() {
         res.send(result);
       } catch (error) {
         res.status(500).send({ error: "Failed to add advertisement" });
+      }
+    });
+
+    // GET /my-advertisements/:email
+    app.get("/myAdvertisements/:email", async (req, res) => {
+      const email = req.params.email;
+      try {
+        const ads = await advertisementCollections.find({ vendor_email: email }).toArray();
+        res.send(ads);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch advertisements", error: err.message });
+      }
+    });
+
+    //Advertise delete API
+    app.delete("/myAdvertisements/:id", async (req, res) => {
+      const id = req.params.id;
+      try {
+        const result = await db.collection("advertisements").deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 1) {
+          res.send({ success: true, message: "Advertisement deleted successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "Advertisement not found" });
+        }
+      } catch (err) {
+        res.status(500).send({ message: "Failed to delete advertisement", error: err.message });
       }
     });
 
