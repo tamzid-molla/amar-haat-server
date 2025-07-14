@@ -61,6 +61,7 @@ async function run() {
     const watchListCollections = db.collection("watchLists");
     const ordersCollections = db.collection("orders");
     const reviewsCollections = db.collection("reviews");
+    const advertisementCollections = db.collection("advertisements");
 
     //Stripe Payment Api
     app.post("/create-payment-intent", async (req, res) => {
@@ -277,6 +278,17 @@ async function run() {
       const result = await reviewsCollections.find(query).sort({ date: -1 }).toArray();
       res.send(result);
     });
+
+     // Add New Advertisement
+  app.post("/advertisements", async (req, res) => {
+    const ad = req.body;
+    try {
+      const result = await advertisementCollections.insertOne(ad);
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ error: "Failed to add advertisement" });
+    }
+  });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
