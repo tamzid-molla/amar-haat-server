@@ -335,6 +335,31 @@ async function run() {
       }
     });
 
+    //Advertise Update API
+    app.patch("/myAdvertisements/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedAd = req.body;
+
+      try {
+        const result = await advertisementCollections.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              title: updatedAd.title,
+              description: updatedAd.description,
+              image: updatedAd.image,
+              updated_at: new Date(),
+            },
+          }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating advertisement:", error);
+        res.status(500).send({ message: "Failed to update advertisement" });
+      }
+    });
+
     //Advertise delete API
     app.delete("/myAdvertisements/:id", async (req, res) => {
       const id = req.params.id;
