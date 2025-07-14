@@ -169,6 +169,37 @@ async function run() {
       res.send(result);
     });
 
+    //Unique Product Finding
+    app.get("/unique_itemName", verifyJWT, async (req, res) => {
+      try {
+        const result = await productsCollections
+          .aggregate([
+            {
+              $group: {
+                _id: "$itemName",
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                itemName: "$_id",
+              },
+            },
+          ])
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.send({ message: error.message });
+      }
+    });
+
+    //Get prices for price trending
+    app.get("/product_by_itemName/:name", async (req, res) => {
+      const name = req.params.name;
+      const product = await productsCollections.findOne({ itemName: name });
+      res.send(product);
+    });
+
     //WatchList post APi
     app.post("/watchList", verifyJWT, async (req, res) => {
       const watchListData = req.body;
