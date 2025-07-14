@@ -85,6 +85,22 @@ async function run() {
       res.send(result);
     });
 
+    // GET all orders of a specific user by email
+    app.get("/myOrders/:email",verifyJWT, async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        const userOrders = await ordersCollections
+          .find({ buyerEmail: email })
+          .sort({ date: -1 })
+          .toArray();
+
+        res.send(userOrders);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to fetch orders." });
+      }
+    });
+
     //save or update user
     app.post("/users", async (req, res) => {
       const userData = req.body;
@@ -213,6 +229,28 @@ async function run() {
       }
       const result = await watchListCollections.insertOne(watchListData);
       res.send(result);
+    });
+
+    //watch list get APi
+    app.get("/my_watchList/:email", verifyJWT, async (req, res) => {
+      const { email } = req.params;
+      const query = { userEmail: email };
+      const result = await watchListCollections.find(query).toArray();
+      res.send(result);
+    });
+
+    //delete Watchlist api
+    app.delete("/watchList/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      try {
+        const result = await watchListCollections.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Watchlist item not found" });
+        }
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: error.message });
+      }
     });
 
     //Reviews post Api
