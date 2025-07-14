@@ -87,14 +87,11 @@ async function run() {
     });
 
     // GET all orders of a specific user by email
-    app.get("/myOrders/:email",verifyJWT, async (req, res) => {
+    app.get("/myOrders/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
       try {
-        const userOrders = await ordersCollections
-          .find({ buyerEmail: email })
-          .sort({ date: -1 })
-          .toArray();
+        const userOrders = await ordersCollections.find({ buyerEmail: email }).sort({ date: -1 }).toArray();
 
         res.send(userOrders);
       } catch (error) {
@@ -210,6 +207,43 @@ async function run() {
       }
     });
 
+    //Get My Products for vender
+    app.get("/my_products/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await productsCollections.find({ vendor_email: email }).toArray();
+      res.send(result);
+    });
+
+    //Delete My Products
+    app.delete("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await productsCollections.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
+    //Update My product
+    app.put("/product/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          vendor_email: updatedData?.vendor_email,
+          vendor_name: updatedData?.vendor_name,
+          market: updatedData?.market,
+          marketDescription: updatedData?.marketDescription,
+          itemName: updatedData?.itemName,
+          itemDescription: updatedData?.itemDescription,
+          prices: updatedData?.prices,
+          created_at: updatedData?.created_at,
+          pricePerUnit: Number(updatedData?.pricePerUnit),
+          ...(updatedData.product_image && { product_image: updatedData.product_image }),
+        },
+      };
+      const result = await productsCollections.updateOne(query, updatedDoc);
+      res.send(result)
+    });
+
     //Get prices for price trending
     app.get("/product_by_itemName/:name", async (req, res) => {
       const name = req.params.name;
@@ -279,16 +313,16 @@ async function run() {
       res.send(result);
     });
 
-     // Add New Advertisement
-  app.post("/advertisements", async (req, res) => {
-    const ad = req.body;
-    try {
-      const result = await advertisementCollections.insertOne(ad);
-      res.send(result);
-    } catch (error) {
-      res.status(500).send({ error: "Failed to add advertisement" });
-    }
-  });
+    // Add New Advertisement
+    app.post("/advertisements", async (req, res) => {
+      const ad = req.body;
+      try {
+        const result = await advertisementCollections.insertOne(ad);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to add advertisement" });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
