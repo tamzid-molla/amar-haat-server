@@ -117,6 +117,24 @@ async function run() {
       res.status(201).send(result);
     });
 
+    //Get all user for Admin
+    app.get("/users", async (req, res) => {
+      const result = await usersCollections.find().sort({created_at:-1}).toArray();
+      res.send(result)
+    })
+
+    //Update Role for Admin
+    app.patch("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const {newRole} = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updateRole = {
+        $set:{role:newRole}
+      }
+      const result = await usersCollections.updateOne(query, updateRole);
+      res.send(result)
+    })
+
     //getting user role
     app.get("/users/role/:email", async (req, res) => {
       const email = req.params.email;
