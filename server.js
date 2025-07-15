@@ -86,7 +86,7 @@ async function run() {
       res.send(result);
     });
 
-    // GET all orders of a specific user by email
+    // GET orders of a specific user by email
     app.get("/myOrders/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
@@ -98,6 +98,12 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch orders." });
       }
     });
+
+    //Get all Orders 
+    app.get("/orders", verifyJWT, async (req, res) => {
+      const result = await ordersCollections.find().sort({ created_at: -1 }).toArray();
+      res.send(result);
+    })
 
     //save or update user
     app.post("/users", async (req, res) => {
@@ -360,6 +366,22 @@ async function run() {
         res.status(500).send({ error: "Failed to add advertisement" });
       }
     });
+
+    //Get all advertise for admin 
+    app.get("/advertisements", async (req, res) => {
+      const result = await advertisementCollections.find().sort({ created_at: -1 }).toArray();
+      res.send(result);
+    })
+
+    //Update advertisement status for admin
+    app.patch("/advertisements/status/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+      const query = { _id: new ObjectId(id) };
+      const result = await advertisementCollections.updateOne(query, { $set: { status } });
+      res.send(result);
+    })
+
 
     // GET /my-advertisements/:email
     app.get("/myAdvertisements/:email", async (req, res) => {
