@@ -38,20 +38,6 @@ const client = new MongoClient(process.env.MONGODB_URI, {
   },
 });
 
-//Verify jwt
-const verifyJWT = async (req, res, next) => {
-  const token = req?.headers?.authorization?.split(" ")[1];
-  if (!token) return res.status(401).send({ message: "Unauthorized Access" });
-
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    req.tokenEmail = decoded?.email;
-    next();
-  } catch (err) {
-    return res.status(401).send({ message: "Unauthorized Access" });
-  }
-};
-
 async function run() {
   try {
     await client.connect();
@@ -63,12 +49,63 @@ async function run() {
     const reviewsCollections = db.collection("reviews");
     const advertisementCollections = db.collection("advertisements");
 
+    //Custom middleware
+    //Verify jwt
+    const verifyJWT = async (req, res, next) => {
+      const token = req?.headers?.authorization?.split(" ")[1];
+      if (!token) return res.status(401).send({ message: "Unauthorized Access" });
+
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded?.email;
+        next();
+      } catch (err) {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+    };
+
+    //Verify Admin
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded;
+      const user = await usersCollections.findOne({ email });
+      if (!user || user?.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden: Admins only" });
+      }
+      next();
+    };
+
+    //Verify Vendor
+    const verifyVendor = async (req, res, next) => {
+      const email = req.decoded;
+      const user = await usersCollections.findOne({ email });
+      if (!user || user?.role !== "vendor") {
+        return res.status(403).send({ message: "Forbidden: vendor only" });
+      }
+      next();
+    };
+
+    //Verify admin or vendor
+    const verifyVendorOrAdmin = async (req, res, next) => {
+      try {
+        const email = req.decoded;
+        const user = await usersCollections.findOne({ email });
+
+        if (!user || (user.role !== "vendor" && user.role !== "admin")) {
+          return res.status(403).send({ message: "Forbidden: Only vendor or admin allowed" });
+        }
+
+        next();
+      } catch (err) {
+        res.status(500).send({ message: "Server error while verifying role" });
+      }
+    };
+
     //Stripe Payment Api
     app.post("/create-payment-intent", async (req, res) => {
       const { amount } = req.body;
       try {
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: parseInt(amount * 100), // Stripe uses cents
+          amount: parseInt(amount * 100),
           currency: "usd",
           payment_method_types: ["card"],
         });
@@ -99,11 +136,11 @@ async function run() {
       }
     });
 
-    //Get all Orders 
-    app.get("/orders", verifyJWT, async (req, res) => {
+    //Get all Orders
+    app.get("/orders", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await ordersCollections.find().sort({ created_at: -1 }).toArray();
       res.send(result);
-    })
+    });
 
     //save or update user
     app.post("/users", async (req, res) => {
@@ -124,13 +161,13 @@ async function run() {
     });
 
     //Get all user for Admin
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await usersCollections.find().sort({ created_at: -1 }).toArray();
       res.send(result);
     });
 
     //Update Role for Admin
-    app.patch("/users/:id", async (req, res) => {
+    app.patch("/users/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { newRole } = req.body;
       const query = { _id: new ObjectId(id) };
@@ -139,6 +176,17 @@ async function run() {
       };
       const result = await usersCollections.updateOne(query, updateRole);
       res.send(result);
+    });
+
+    // GET a user by email
+    app.get("/users/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const decodedEmail = req.decoded;
+      if (email !== decodedEmail) {
+        return res.status(401).send({ message: "Unauthorize access" });
+      }
+      const user = await usersCollections.findOne({ email });
+      res.send(user);
     });
 
     //getting user role
@@ -150,7 +198,7 @@ async function run() {
     });
 
     //Add all products
-    app.post("/products", verifyJWT, async (req, res) => {
+    app.post("/products", verifyJWT, verifyVendor, async (req, res) => {
       const productData = req.body;
       if (typeof productData.created_at === "string") {
         productData.created_at = new Date(productData.created_at);
@@ -184,23 +232,15 @@ async function run() {
 
     //get 6 product deferent market for home page
     app.get("/products", async (req, res) => {
-      const today = new Date();
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(today.getDate() - 2);
-
       const query = {
         status: "approved",
-        created_at: {
-          $gte: threeDaysAgo,
-          $lte: today,
-        },
       };
-      const result = await productsCollections.find(query).limit(6).toArray();
+      const result = await productsCollections.find(query).sort({ created_at: -1 }).limit(6).toArray();
       res.send(result);
     });
 
     //Get specific product for product Details
-    app.get("/product/:id", async (req, res) => {
+    app.get("/product/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await productsCollections.findOne(query);
@@ -208,13 +248,13 @@ async function run() {
     });
 
     //Get All Products
-    app.get("/products/allProducts", async (req, res) => {
+    app.get("/products/allProducts", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await productsCollections.find().sort({ created_at: -1 }).toArray();
       res.send(result);
     });
 
     //Product Approve or reject
-    app.patch("/products/status/:id", async (req, res) => {
+    app.patch("/products/status/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { status, feedback } = req.body;
       const query = { _id: new ObjectId(id) };
@@ -251,21 +291,21 @@ async function run() {
     });
 
     //Get My Products for vender
-    app.get("/my_products/:email", async (req, res) => {
+    app.get("/my_products/:email", verifyJWT, verifyVendor, async (req, res) => {
       const email = req.params.email;
       const result = await productsCollections.find({ vendor_email: email }).toArray();
       res.send(result);
     });
 
     //Delete My Products
-    app.delete("/products/:id", async (req, res) => {
+    app.delete("/products/:id", verifyJWT, verifyVendor, async (req, res) => {
       const id = req.params.id;
       const result = await productsCollections.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
     //Update My product
-    app.put("/product/:id", verifyJWT, async (req, res) => {
+    app.put("/product/:id", verifyJWT,verifyVendorOrAdmin, async (req, res) => {
       const id = req.params.id;
       const updatedData = req.body;
       const query = { _id: new ObjectId(id) };
@@ -288,7 +328,7 @@ async function run() {
     });
 
     //Get prices for price trending
-    app.get("/product_by_itemName/:name", async (req, res) => {
+    app.get("/product_by_itemName/:name", verifyJWT, async (req, res) => {
       const name = req.params.name;
       const product = await productsCollections.findOne({ itemName: name });
       res.send(product);
@@ -357,7 +397,7 @@ async function run() {
     });
 
     // Add New Advertisement
-    app.post("/advertisements", async (req, res) => {
+    app.post("/advertisements",verifyJWT, verifyVendor, async (req, res) => {
       const ad = req.body;
       try {
         const result = await advertisementCollections.insertOne(ad);
@@ -367,24 +407,29 @@ async function run() {
       }
     });
 
-    //Get all advertise for admin 
-    app.get("/advertisements", async (req, res) => {
+    //Get all advertise for admin
+    app.get("/advertisements",verifyJWT, verifyAdmin, async (req, res) => {
       const result = await advertisementCollections.find().sort({ created_at: -1 }).toArray();
       res.send(result);
-    })
+    });
+
+    //Get only Approved advertise for home page
+    app.get("/advertisements/status", async (req, res) => {
+      const result = await advertisementCollections.find({ status: "approved" }).sort({ created_at: -1 }).toArray();
+      res.send(result);
+    });
 
     //Update advertisement status for admin
-    app.patch("/advertisements/status/:id", async (req, res) => {
+    app.patch("/advertisements/status/:id", verifyJWT,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { status } = req.body;
       const query = { _id: new ObjectId(id) };
       const result = await advertisementCollections.updateOne(query, { $set: { status } });
       res.send(result);
-    })
-
+    });
 
     // GET /my-advertisements/:email
-    app.get("/myAdvertisements/:email", async (req, res) => {
+    app.get("/myAdvertisements/:email", verifyJWT,verifyVendor, async (req, res) => {
       const email = req.params.email;
       try {
         const ads = await advertisementCollections.find({ vendor_email: email }).toArray();
@@ -395,7 +440,7 @@ async function run() {
     });
 
     //Advertise Update API
-    app.patch("/myAdvertisements/:id", async (req, res) => {
+    app.patch("/myAdvertisements/:id",verifyJWT, verifyVendor, async (req, res) => {
       const id = req.params.id;
       const updatedAd = req.body;
 
@@ -420,7 +465,7 @@ async function run() {
     });
 
     //Advertise delete API
-    app.delete("/myAdvertisements/:id", async (req, res) => {
+    app.delete("/myAdvertisements/:id",verifyJWT,verifyVendorOrAdmin, async (req, res) => {
       const id = req.params.id;
       try {
         const result = await db.collection("advertisements").deleteOne({ _id: new ObjectId(id) });
