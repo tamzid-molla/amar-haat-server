@@ -305,7 +305,7 @@ async function run() {
     });
 
     //Update My product
-    app.put("/product/:id", verifyJWT,verifyVendorOrAdmin, async (req, res) => {
+    app.put("/product/:id", verifyJWT, verifyVendorOrAdmin, async (req, res) => {
       const id = req.params.id;
       const updatedData = req.body;
       const query = { _id: new ObjectId(id) };
@@ -397,7 +397,7 @@ async function run() {
     });
 
     // Add New Advertisement
-    app.post("/advertisements",verifyJWT, verifyVendor, async (req, res) => {
+    app.post("/advertisements", verifyJWT, verifyVendor, async (req, res) => {
       const ad = req.body;
       try {
         const result = await advertisementCollections.insertOne(ad);
@@ -408,7 +408,7 @@ async function run() {
     });
 
     //Get all advertise for admin
-    app.get("/advertisements",verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/advertisements", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await advertisementCollections.find().sort({ created_at: -1 }).toArray();
       res.send(result);
     });
@@ -420,7 +420,7 @@ async function run() {
     });
 
     //Update advertisement status for admin
-    app.patch("/advertisements/status/:id", verifyJWT,verifyAdmin, async (req, res) => {
+    app.patch("/advertisements/status/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { status } = req.body;
       const query = { _id: new ObjectId(id) };
@@ -429,7 +429,7 @@ async function run() {
     });
 
     // GET /my-advertisements/:email
-    app.get("/myAdvertisements/:email", verifyJWT,verifyVendor, async (req, res) => {
+    app.get("/myAdvertisements/:email", verifyJWT, verifyVendor, async (req, res) => {
       const email = req.params.email;
       try {
         const ads = await advertisementCollections.find({ vendor_email: email }).toArray();
@@ -440,7 +440,7 @@ async function run() {
     });
 
     //Advertise Update API
-    app.patch("/myAdvertisements/:id",verifyJWT, verifyVendor, async (req, res) => {
+    app.patch("/myAdvertisements/:id", verifyJWT, verifyVendor, async (req, res) => {
       const id = req.params.id;
       const updatedAd = req.body;
 
@@ -465,10 +465,10 @@ async function run() {
     });
 
     //Advertise delete API
-    app.delete("/myAdvertisements/:id",verifyJWT,verifyVendorOrAdmin, async (req, res) => {
+    app.delete("/myAdvertisements/:id", verifyJWT, verifyVendorOrAdmin, async (req, res) => {
       const id = req.params.id;
       try {
-        const result = await db.collection("advertisements").deleteOne({ _id: new ObjectId(id) });
+        const result = await advertisementCollections.deleteOne({ _id: new ObjectId(id) });
         if (result.deletedCount === 1) {
           res.send({ success: true, message: "Advertisement deleted successfully" });
         } else {
@@ -476,6 +476,77 @@ async function run() {
         }
       } catch (err) {
         res.status(500).send({ message: "Failed to delete advertisement", error: err.message });
+      }
+    });
+
+    //----------States---------------------//
+    //Admin dashboard states
+    app.get("/admin/stats", verifyJWT, verifyAdmin, async (req, res) => {
+      const totalUsers = await usersCollections.countDocuments();
+      const totalVendors = await usersCollections.countDocuments({ role: "vendor" });
+      const totalOrders = await ordersCollections.countDocuments();
+
+      const approvedProducts = await productsCollections.countDocuments({ status: "approved" });
+      const pendingProducts = await productsCollections.countDocuments({ status: "pending" });
+
+      const approvedAds = await advertisementCollections.countDocuments({ status: "approved" });
+      const pendingAds = await advertisementCollections.countDocuments({ status: "pending" });
+
+      const admin = await usersCollections.findOne({ role: "admin" });
+      const lastLogin = admin?.last_loggedIn || new Date();
+
+      res.send({
+        totalUsers,
+        totalVendors,
+        totalOrders,
+        approvedProducts,
+        pendingProducts,
+        approvedAds,
+        pendingAds,
+        lastLogin,
+      });
+    });
+
+    //Vendor dashboard state
+    app.get("/vendor/stats", verifyJWT, verifyVendor, async (req, res) => {
+      const email = req.decoded;
+
+      try {
+        const myProducts = await productsCollections.countDocuments({ vendor_email: email });
+        const approvedProducts = await productsCollections.countDocuments({ vendor_email: email, status: "approved" });
+        const pendingProducts = await productsCollections.countDocuments({ vendor_email: email, status: "pending" });
+        const myOrders = await ordersCollections.countDocuments({ vendorEmail: email });
+        const myAds = await advertisementCollections.countDocuments({ vendor_email: email });
+
+        const user = await usersCollections.findOne({ email });
+        const lastLogin = user?.last_loggedIn || null;
+
+        res.send({ myProducts, approvedProducts, pendingProducts, myOrders, myAds, lastLogin });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch vendor stats" });
+      }
+    });
+
+    //User dashboard state
+    app.get("/user/stats", verifyJWT, async (req, res) => {
+      const email = req.query.email;
+      const decodedEmail = req.decoded;
+
+      if (!email || email !== decodedEmail) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      try {
+        const myOrders = await ordersCollections.countDocuments({ buyerEmail: email });
+        const watchList = await watchListCollections.countDocuments({ userEmail: email });
+        const myReviews = await reviewsCollections.countDocuments({ userEmail: email });
+
+        const user = await usersCollections.findOne({ email });
+        const lastLogin = user?.last_loggedIn || null;
+
+        res.send({ myOrders, watchList, myReviews, lastLogin });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch user stats" });
       }
     });
 
