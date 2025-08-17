@@ -27,3 +27,4 @@ out/
 *.ntvs*
 *.njsproj
 *.sln
+.vercel

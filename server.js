@@ -40,7 +40,7 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("bazarDb");
     const usersCollections = db.collection("users");
     const productsCollections = db.collection("products");
@@ -48,6 +48,7 @@ async function run() {
     const ordersCollections = db.collection("orders");
     const reviewsCollections = db.collection("reviews");
     const advertisementCollections = db.collection("advertisements");
+    const websiteReviewsCollections = db.collection("webReviews");
 
     //Custom middleware
     //Verify jwt
@@ -213,11 +214,10 @@ async function run() {
       const { start, end, sort } = req.query;
       const query = {};
       if (start && end) {
-        const startDate = new Date(start);
-        const endDate = new Date(end);
+    
         query.created_at = {
-          $gte: startDate,
-          $lte: endDate,
+          $gte: start,
+          $lte: end,
         };
       }
 
@@ -479,6 +479,23 @@ async function run() {
       }
     });
 
+
+    app.post('/reviewData', async(req, res) => {
+      const data = req.body;
+
+
+      const query = {
+        userEmail: data?.userEmail,
+      };
+      const isExist = await websiteReviewsCollections.findOne(query);
+      if (isExist) {
+        return res.send({ message: "You have already reviewed this product." });
+      }
+      
+      const result = await websiteReviewsCollections.insertOne(data);
+      res.send(result)
+    })
+
     //----------States---------------------//
     //Admin dashboard states
     app.get("/admin/stats", verifyJWT, verifyAdmin, async (req, res) => {
@@ -551,12 +568,16 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
   }
 }
 run().catch(console.dir);
+
+app.get("/", (req, res) => {
+  res.send("server running good")
+})
 
 app.listen(port, () => {
   console.log(`server running at ${port}`);
