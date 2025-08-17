@@ -480,6 +480,7 @@ async function run() {
     });
 
 
+    //Post Api for website reviews
     app.post('/reviewData', async(req, res) => {
       const data = req.body;
 
@@ -495,6 +496,40 @@ async function run() {
       const result = await websiteReviewsCollections.insertOne(data);
       res.send(result)
     })
+
+
+    //Get API for getting website reviews
+    app.get("/reviewData", async (req, res) => {
+      const result = await websiteReviewsCollections.find().limit(3).toArray();
+      res.send(result)
+    })
+
+    //Get api for getting best selling products
+    app.get("/reviews", async (req, res) => {
+  try {
+    const result = await reviewsCollections.aggregate([
+      {
+        $sort: { date: -1 }
+      },
+      {
+        $group: {
+          _id: "$productId",
+          product_Name: { $first: "$product_Name" },
+          product_image: { $first: "$product_image" },
+          rating: { $first: "$rating" },
+          date: { $first: "$date" }
+        }
+      },
+      {
+        $sort: { date: -1 }
+      }
+    ]).toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: 'Error fetching reviews' });
+  }
+});
 
     //----------States---------------------//
     //Admin dashboard states
